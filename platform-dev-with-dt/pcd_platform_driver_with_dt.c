@@ -24,6 +24,32 @@ enum PCD_DEV_DATA {
     PCDEVD1X,
 };
 
+
+struct platform_device_id pcdev_ids[] = {
+    [0] = {
+        .name = "pcdev-A1X", .driver_data = PCDEVA1X
+    },
+    [1] = {
+        .name = "pcdev-B1X", .driver_data = PCDEVB1X
+    },
+    [2] = {
+        .name = "pcdev-C1X", .driver_data = PCDEVC1X
+    },
+    [3] = {
+        .name = "pcdev-D1X", .driver_data = PCDEVD1X
+    }
+};
+
+struct of_device_id org_pcdev_dt_match[] = 
+{
+    {.compatible = "pcdev-A1X", .data = (void*)PCDEVA1X},
+    {.compatible = "pcdev-B1X", .data = (void*)PCDEVB1X},
+    {.compatible = "pcdev-C1X", .data = (void*)PCDEVC1X},
+    {.compatible = "pcdev-D1X", .data = (void*)PCDEVD1X},
+};
+
+
+
 /* Device private data structure */
 struct pcdev_priv_data
 {
@@ -222,25 +248,29 @@ int pl_drv_probe(struct platform_device* dev)
 
     int driver_data;
 
+    const struct of_device_id *match;
+
     dev_info(&dev->dev, "%s: A device is detected\n", __func__);
 
-    pl_data = pcdev_get_platdata_from_dt(&dev->dev);
-
-    if (IS_ERR(pl_data)) {
-        return -EINVAL;
-    }
+    match = of_match_device(of_match_ptr(org_pcdev_dt_match), &dev->dev);
 
     /*1. Get the platform data */
+    if (match) {
+        pl_data = pcdev_get_platdata_from_dt(&dev->dev);
+
+        if (IS_ERR(pl_data)) {
+            return -EINVAL;
+        }
+        driver_data = (int) match->data;
+    } else {
+        pl_data = (struct platform_data*) dev_get_platdata(&dev->dev);
+        driver_data = dev->id_entry->driver_data;
+    }
+
     if (!pl_data) {
-        pl_data = (struct platform_data*)dev_get_platdata(&dev->dev);
-        if (!pl_data) {
             dev_err(&dev->dev, "%s: No platform data available\n", __func__);
             return -EINVAL;
         }
-        driver_data = dev->id_entry->driver_data;
-    } else {
-        driver_data = (int) of_device_get_match_data(&dev->dev);
-    }
 
     /*2. Dynamically allocate memory for the device private data */
     dev_data = devm_kzalloc(&dev->dev, sizeof(*dev_data), GFP_KERNEL);
@@ -309,29 +339,6 @@ int pl_drv_remove(struct platform_device* dev)
     
     return 0;
 }
-
-struct platform_device_id pcdev_ids[] = {
-    [0] = {
-        .name = "pcdev-A1X", .driver_data = PCDEVA1X
-    },
-    [1] = {
-        .name = "pcdev-B1X", .driver_data = PCDEVB1X
-    },
-    [2] = {
-        .name = "pcdev-C1X", .driver_data = PCDEVC1X
-    },
-    [3] = {
-        .name = "pcdev-D1X", .driver_data = PCDEVD1X
-    }
-};
-
-struct of_device_id org_pcdev_dt_match[] = 
-{
-    {.compatible = "pcdev-A1X", .data = (void*)PCDEVA1X},
-    {.compatible = "pcdev-B1X", .data = (void*)PCDEVB1X},
-    {.compatible = "pcdev-C1X", .data = (void*)PCDEVC1X},
-    {.compatible = "pcdev-D1X", .data = (void*)PCDEVD1X},
-};
 
 struct platform_driver pl_drv =
 {
