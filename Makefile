@@ -1,5 +1,6 @@
 
-SUBDIRS = pseudo-chardev pseudo-platform pseudo-platform-with-dt 
+SUBDIRS = pseudo-chardev pseudo-platform platform-dev-with-dt \
+	platform-dev-with-dt-overlay pcd_sysfs
 
 all: subdirs
 
