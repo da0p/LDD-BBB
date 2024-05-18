@@ -9,6 +9,7 @@
 #include <linux/gfp.h>
 #include <linux/uaccess.h>
 #include <linux/mod_devicetable.h>
+#include <linux/mutex.h>
 
 #include "platform.h"
 
@@ -21,6 +22,7 @@ struct pcdev_priv_data
     char *buffer;
     dev_t dev_num;
     struct cdev cdev;
+    struct mutex plock;
 };
 
 /* Driver private data structure */
@@ -122,6 +124,9 @@ loff_t pl_pcd_lseek(struct file *filp, loff_t offset, int whence)
 ssize_t pl_pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *f_pos)
 {
     struct pcdev_priv_data *priv_data = (struct pcdev_priv_data*) filp->private_data;
+
+    mutex_lock(&priv_data->plock);
+
     if (*f_pos + count > priv_data->pl_data.size) {
         count = priv_data->pl_data.size - *f_pos;
     }
@@ -134,6 +139,8 @@ ssize_t pl_pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *
     /* Update the current file's position */
     *f_pos += count;
 
+    mutex_unlock(&priv_data->plock);
+
     return count;
 }
 
@@ -141,6 +148,9 @@ ssize_t pl_pcd_write(struct file *filp, const char __user *buff, size_t count, l
 {
 
     struct pcdev_priv_data *priv_data = (struct pcdev_priv_data*) filp->private_data;
+
+    mutex_lock(&priv_data->plock);
+
     if (*f_pos + count > priv_data->pl_data.size) {
         count = priv_data->pl_data.size - *f_pos;
     }
@@ -156,6 +166,8 @@ ssize_t pl_pcd_write(struct file *filp, const char __user *buff, size_t count, l
 
     /* Update the current file's position */
     *f_pos += count;
+
+    mutex_unlock(&priv_data->plock);
 
     return count;
 }
@@ -192,6 +204,7 @@ int pl_drv_probe(struct platform_device* dev)
         pr_err("%s: Can't allocate memory\n", __func__);
         return -ENOMEM;
     }
+    mutex_init(&dev_data->plock);
 
     dev_data->pl_data.size = pl_data->size;
     dev_data->pl_data.perm = pl_data->perm;

@@ -12,8 +12,8 @@
 #include <linux/of.h>
 #include <linux/device.h>
 #include <linux/of_device.h>
+#include <linux/stat.h>
 
-#include "linux/stat.h"
 #include "pcd_syscalls.h"
 #include "platform.h"
 
@@ -56,10 +56,17 @@ struct file_operations fops =
 
 ssize_t max_size_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+    int ret;
     /* Get access to the device's private data */
     struct pcdev_priv_data *dev_data = dev_get_drvdata(dev->parent);
 
-    return sprintf(buf, "%d\n", dev_data->pl_data.size);
+    mutex_lock(&dev_data->plock);
+
+    ret = sprintf(buf, "%d\n", dev_data->pl_data.size);
+
+    mutex_unlock(&dev_data->plock);
+
+    return ret;
 }
 
 ssize_t max_size_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -67,6 +74,8 @@ ssize_t max_size_store(struct device *dev, struct device_attribute *attr, const 
     long result;
     int ret;
     struct pcdev_priv_data *dev_data = dev_get_drvdata(dev->parent);
+
+    mutex_lock(&dev_data->plock);
 
     ret = kstrtol(buf, 10, &result);
     if (ret) {
@@ -77,15 +86,24 @@ ssize_t max_size_store(struct device *dev, struct device_attribute *attr, const 
 
     dev_data->buffer = krealloc(dev_data->buffer, dev_data->pl_data.size, GFP_KERNEL);
 
+    mutex_unlock(&dev_data->plock);
+
     return count;
 }
 
 ssize_t serial_no_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+    int ret;
     /* Get access to the device's private data */
     struct pcdev_priv_data *dev_data = dev_get_drvdata(dev->parent);
 
-    return sprintf(buf, "%s\n", dev_data->pl_data.serial_number);
+    mutex_lock(&dev_data->plock);
+
+    ret = sprintf(buf, "%s\n", dev_data->pl_data.serial_number);
+
+    mutex_unlock(&dev_data->plock);
+
+    return ret;
 }
 
 /* create two variables of struct device_attribute */
@@ -179,6 +197,8 @@ int pl_drv_probe(struct platform_device* dev)
         dev_err(&dev->dev, "%s: Can't allocate memory\n", __func__);
         return -ENOMEM;
     }
+
+    mutex_init(&dev_data->plock);
 
     dev_data->pl_data.size = pl_data->size;
     dev_data->pl_data.perm = pl_data->perm;

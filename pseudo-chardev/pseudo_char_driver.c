@@ -4,6 +4,7 @@
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/cdev.h>
+#include <linux/mutex.h>
 
 #define NO_OF_DEVS 4
 
@@ -32,6 +33,7 @@ struct pcd_private_data
     const char *serial_number;
     int perm;
     struct cdev cdev;
+    struct mutex plock;
 };
 
 /* Driver private data structure */
@@ -168,6 +170,8 @@ ssize_t pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *f_p
 {
     struct pcd_private_data * p_priv_data = (struct pcd_private_data*)filp->private_data;
 
+    mutex_lock(&p_priv_data->plock);
+
     pr_info("Read requested for %zu bytes\n", count);
     pr_info("Current file position = %lld\n", *f_pos);
 
@@ -187,6 +191,8 @@ ssize_t pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *f_p
     pr_info("Number of bytes successfully read = %zu\n", count);
     pr_info("Updated file position = %lld\n", *f_pos);
 
+    mutex_unlock(&p_priv_data->plock);
+
     /* Return number of bytes which have been successfully read */
     return count;
 }
@@ -194,6 +200,8 @@ ssize_t pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *f_p
 ssize_t pcd_write(struct file *filep, const char __user *buff, size_t count, loff_t *f_pos)
 {
     struct pcd_private_data* p_priv_data = (struct pcd_private_data*) filep->private_data;
+
+    mutex_lock(&p_priv_data->plock);
 
     pr_info("Write requested for %zu\n", count);
 
@@ -210,6 +218,8 @@ ssize_t pcd_write(struct file *filep, const char __user *buff, size_t count, lof
     }
 
     pr_info("Number of bytes successfully written = %zu\n", count);
+
+    mutex_unlock(&p_priv_data->plock);
 
     return count;
 }
@@ -251,6 +261,8 @@ static int __init pcd_init(void)
             i + 1,
             MAJOR(pcd_priv_data.dev + i), 
             MINOR(pcd_priv_data.dev + i));
+
+            mutex_init(&pcd_priv_data.pcd_data[i].plock);
 
         /*2. Initialize the cdev structure with fops */
         cdev_init(&pcd_priv_data.pcd_data[i].cdev, &pcd_fops);

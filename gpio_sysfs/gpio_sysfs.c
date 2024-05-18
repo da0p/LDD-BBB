@@ -9,6 +9,7 @@
 #include <linux/module.h>
 #include <linux/gpio/consumer.h>
 #include <linux/device.h>
+#include <linux/mutex.h>
 
 #define LABEL_SIZE 20
 
@@ -16,6 +17,7 @@ struct gpiodev_priv_data
 {
     char label[LABEL_SIZE];
     struct gpio_desc* desc;
+    struct mutex plock;
 };
 
 struct gpiodrv_priv_data
@@ -29,10 +31,13 @@ struct gpiodrv_priv_data gpio_drv_data;
 
 ssize_t direction_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+    int ret;
     /* Here, we don't need to extract dev_data from dev->parent because of device_create_with_groups */
     struct gpiodev_priv_data *dev_data = dev_get_drvdata(dev);
     int dir;
     char *dir_label;
+
+    mutex_lock(&dev_data->plock);
 
     dir = gpiod_get_direction(dev_data->desc);
     if (dir < 0) {
@@ -41,13 +46,19 @@ ssize_t direction_show(struct device *dev, struct device_attribute *attr, char *
     /* if dir = 0, then show "out", if dir=1, then show "in" */
     dir_label = (dir == 0) ? "out" : "in";
 
-    return sprintf(buf, "%s\n", dir_label);
+    ret = sprintf(buf, "%s\n", dir_label);
+
+    mutex_unlock(&dev_data->plock);
+
+    return ret;
 }
 
 ssize_t direction_store(struct device *dev, struct device_attribute *attr, const char* buf, size_t count)
 {
     struct gpiodev_priv_data *dev_data = dev_get_drvdata(dev);
     int ret;
+
+    mutex_lock(&dev_data->plock);
 
     if (sysfs_streq(buf, "in")) {
         ret = gpiod_direction_input(dev_data->desc);
@@ -57,17 +68,28 @@ ssize_t direction_store(struct device *dev, struct device_attribute *attr, const
         ret = -EINVAL;
     }
 
-    return ret ? : count;
+    ret = ret ? : count;
+
+    mutex_unlock(&dev_data->plock);
+
+    return ret;
 }
 
 ssize_t value_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+    int ret;
     struct gpiodev_priv_data *dev_data = dev_get_drvdata(dev);
     int value;
 
+    mutex_lock(&dev_data->plock);
+
     value = gpiod_get_value(dev_data->desc);
 
-    return sprintf(buf, "%d\n", value);
+    ret = sprintf(buf, "%d\n", value);
+
+    mutex_unlock(&dev_data->plock);
+
+    return ret;
 }
 
 ssize_t value_store(struct device *dev, struct device_attribute *attr, const char* buf, size_t count)
@@ -76,6 +98,8 @@ ssize_t value_store(struct device *dev, struct device_attribute *attr, const cha
     int ret;
     long value;
 
+    mutex_lock(&dev_data->plock);
+
     ret = kstrtol(buf, 0, &value);
     if (ret) {
         return ret;
@@ -83,14 +107,23 @@ ssize_t value_store(struct device *dev, struct device_attribute *attr, const cha
 
     gpiod_set_value(dev_data->desc, value);
 
+    mutex_unlock(&dev_data->plock);
+
     return count;
 }
 
 ssize_t label_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+    int ret;
     struct gpiodev_priv_data *dev_data = dev_get_drvdata(dev);
 
-    return sprintf(buf, "%s\n", dev_data->label);
+    mutex_lock(&dev_data->plock);
+
+    ret = sprintf(buf, "%s\n", dev_data->label);
+
+    mutex_unlock(&dev_data->plock);
+
+    return ret;
 }
 
 static DEVICE_ATTR_RW(direction);
@@ -138,6 +171,8 @@ int gpio_sysfs_probe(struct platform_device *pdev)
             dev_err(&pdev->dev, "Cannot allocate memory\n");
             return -ENOMEM;
         }
+
+        mutex_init(&dev_data->plock);
 
         if (of_property_read_string(child, "label", &label)) {
             dev_warn(&pdev->dev, "Missing label information\n");

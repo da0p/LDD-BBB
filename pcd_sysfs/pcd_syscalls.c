@@ -93,6 +93,9 @@ loff_t pl_pcd_lseek(struct file *filp, loff_t offset, int whence)
 ssize_t pl_pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *f_pos)
 {
     struct pcdev_priv_data *priv_data = (struct pcdev_priv_data*) filp->private_data;
+
+    mutex_lock(&priv_data->plock);
+
     if (*f_pos + count > priv_data->pl_data.size) {
         count = priv_data->pl_data.size - *f_pos;
     }
@@ -105,6 +108,8 @@ ssize_t pl_pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *
     /* Update the current file's position */
     *f_pos += count;
 
+    mutex_unlock(&priv_data->plock);
+
     return count;
 }
 
@@ -112,6 +117,9 @@ ssize_t pl_pcd_write(struct file *filp, const char __user *buff, size_t count, l
 {
 
     struct pcdev_priv_data *priv_data = (struct pcdev_priv_data*) filp->private_data;
+
+    mutex_lock(&priv_data->plock);
+
     if (*f_pos + count > priv_data->pl_data.size) {
         count = priv_data->pl_data.size - *f_pos;
     }
@@ -127,6 +135,8 @@ ssize_t pl_pcd_write(struct file *filp, const char __user *buff, size_t count, l
 
     /* Update the current file's position */
     *f_pos += count;
+
+    mutex_unlock(&priv_data->plock);
 
     return count;
 }

@@ -4,6 +4,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
 #include <linux/cdev.h>
+#include <linux/mutex.h>
 
 #define MAX_DEVICES 4
 
@@ -28,6 +29,7 @@ struct pcdev_priv_data
     char *buffer;
     dev_t dev_num;
     struct cdev cdev;
+    struct mutex plock;
 };
 
 /* Driver private data structure */
